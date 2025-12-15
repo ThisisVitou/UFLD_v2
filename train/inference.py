@@ -220,8 +220,7 @@ def test_dataset(model, cfg, test_file=None, save_viz=False, compute_metrics=Fal
     # Create dataset
     dataset = TuSimpleDataset(
         cfg=cfg,
-        split='val',
-        is_train=False
+        mode='val'
     )
     
     print(f"Test samples: {len(dataset)}")
