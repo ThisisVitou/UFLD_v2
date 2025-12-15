@@ -17,7 +17,7 @@ def decode_predictions(predictions, cfg, threshold=0.5):
     Args:
         predictions: Dictionary with model outputs
             - loc_row: [B, num_cell_row, num_row, num_lanes]
-            - exist_row: [B, 2, num_row, num_lanes]
+            - exist_row: [B, 2, num_row, num_lanes] or [B, num_row, num_lanes]
         cfg: Configuration object
         threshold: Existence threshold
     
@@ -25,59 +25,72 @@ def decode_predictions(predictions, cfg, threshold=0.5):
         List of lanes for each image in batch
         Each lane is list of (x, y) tuples
     """
+    import torch
+    
     batch_size = predictions['loc_row'].shape[0]
-    h_samples = cfg.h_samples
+    num_cell_row = predictions['loc_row'].shape[1]  # Get from actual tensor shape
+    num_row = predictions['loc_row'].shape[2]
+    num_lanes = predictions['loc_row'].shape[3]
     
     all_lanes = []
     
     for b in range(batch_size):
-        img_lanes = []
+        batch_lanes = []
         
-        for lane_idx in range(cfg.num_lanes):
+        # Process each lane
+        for lane_idx in range(num_lanes):
             lane_points = []
             
-            for cls_idx, y in enumerate(h_samples):
-                # Check existence
-                exist_logits = predictions['exist_row'][b, :, cls_idx, lane_idx]
-                if torch.is_tensor(exist_logits):
-                    exist_logits = exist_logits.cpu().numpy()
-                
-                # Softmax to get probability
-                exist_prob = np.exp(exist_logits) / np.sum(np.exp(exist_logits))
-                
-                if exist_prob[1] < threshold:  # Class 1 = exists
-                    continue
-                
-                # Get location
-                loc_values = predictions['loc_row'][b, :, cls_idx, lane_idx]
-                if torch.is_tensor(loc_values):
-                    loc_values = loc_values.cpu().numpy()
-                
-                # Find valid cells
-                valid_mask = loc_values > -1e4
-                if not valid_mask.any():
-                    continue
-                
-                # Use first valid cell
-                valid_cells = np.where(valid_mask)[0]
-                cell_idx = valid_cells[0]
-                offset = loc_values[cell_idx]
-                
-                # Convert to pixel coordinates
-                cell_start = cell_idx / cfg.num_cell_row
-                cell_size = 1.0 / cfg.num_cell_row
-                x_norm = cell_start + offset * cell_size
-                x = x_norm * cfg.train_width
-                
-                # Scale y to image coordinates
-                y_scaled = y * cfg.train_height / cfg.original_height
-                
-                lane_points.append((int(x), int(y_scaled)))
+            # Get location and existence predictions for this lane
+            loc_row = predictions['loc_row'][b, :, :, lane_idx]  # [num_cell_row, num_row]
             
+            # Handle existence - could be [2, num_row, num_lanes] or [num_row, num_lanes]
+            if predictions['exist_row'].dim() == 4:  # [B, 2, num_row, num_lanes]
+                exist_row = torch.softmax(predictions['exist_row'][b, :, :, lane_idx], dim=0)
+                exist_prob = exist_row[1]  # Probability of existence
+            else:  # [B, num_row, num_lanes]
+                exist_prob = predictions['exist_row'][b, :, lane_idx]
+            
+            # For each row position
+            for row_idx in range(num_row):
+                # Check if lane exists at this row
+                if exist_prob[row_idx] < threshold:
+                    continue
+                
+                # Get location prediction for this row
+                loc_pred = loc_row[:, row_idx]  # [num_cell_row]
+                
+                # Find the cell with maximum value (which grid cell contains the lane)
+                max_cell = torch.argmax(loc_pred).item()
+                offset = loc_pred[max_cell].item()
+                
+                # Skip if offset is invalid (uninitialized target value)
+                if offset < -1e4 or offset > 1.0 or offset < 0.0:
+                    continue
+                
+                # Convert cell index + offset to normalized x coordinate [0, 1]
+                # max_cell is in range [0, num_cell_row-1]
+                # offset is in range [0, 1] (position within the cell)
+                cell_width = 1.0 / num_cell_row
+                x_normalized = (max_cell * cell_width) + (offset * cell_width)
+                
+                # Clamp to valid range
+                x_normalized = max(0.0, min(1.0, x_normalized))
+                
+                # Convert row index to normalized y coordinate [0, 1]
+                y_normalized = row_idx / (num_row - 1) if num_row > 1 else 0.5
+                
+                # Scale to image dimensions
+                x = x_normalized * cfg.train_width
+                y = y_normalized * cfg.train_height
+                
+                lane_points.append((int(x), int(y)))
+            
+            # Only add lane if it has enough points
             if len(lane_points) >= 2:
-                img_lanes.append(lane_points)
+                batch_lanes.append(lane_points)
         
-        all_lanes.append(img_lanes)
+        all_lanes.append(batch_lanes)
     
     return all_lanes
 
