@@ -115,6 +115,27 @@ def test_single_image(model, image_path, cfg, output_path=None):
     # Inference
     with torch.no_grad():
         predictions = model(image_tensor)
+
+    # ========== ADD DEBUG CODE HERE ==========
+    print("\n" + "="*60)
+    print("DEBUG: Prediction Statistics")
+    print("="*60)
+    print(f"loc_row shape: {predictions['loc_row'].shape}")
+    print(f"loc_row range: [{predictions['loc_row'].min():.2f}, {predictions['loc_row'].max():.2f}]")
+    print(f"loc_row mean: {predictions['loc_row'].mean():.2f}")
+    print(f"\nexist_row shape: {predictions['exist_row'].shape}")
+    
+    if predictions['exist_row'].dim() == 4:
+        exist_probs = torch.softmax(predictions['exist_row'], dim=1)[:, 1]
+        print(f"exist_prob range: [{exist_probs.min():.2f}, {exist_probs.max():.2f}]")
+        print(f"exist_prob mean: {exist_probs.mean():.2f}")
+        print(f"High confidence predictions (>0.5): {(exist_probs > 0.5).sum().item()}")
+    
+    # Check for invalid values
+    invalid_count = (predictions['loc_row'] < -1e4).sum().item()
+    print(f"\nInvalid location predictions: {invalid_count}")
+    print("="*60 + "\n")
+    # ========== END DEBUG CODE ==========
     
     # Decode predictions
     pred_dict = {
@@ -122,6 +143,19 @@ def test_single_image(model, image_path, cfg, output_path=None):
         'exist_row': predictions['exist_row']
     }
     lanes = decode_predictions(pred_dict, cfg)
+
+    
+    # ========== ADD MORE DEBUG HERE ==========
+    print(f"Decoded {len(lanes[0])} lanes:")
+    for i, lane in enumerate(lanes[0]):
+        print(f"  Lane {i}: {len(lane)} points")
+        if len(lane) > 0:
+            xs = [p[0] for p in lane]
+            ys = [p[1] for p in lane]
+            print(f"    X range: [{min(xs)}, {max(xs)}]")
+            print(f"    Y range: [{min(ys)}, {max(ys)}]")
+    print()
+    # ========== END DEBUG CODE ==========
     
     # Scale lanes back to original image size
     scaled_lanes = []
