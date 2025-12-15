@@ -1,0 +1,27 @@
+# Ultra-Fast Lane Detection - TuSimple Training Pipeline
+# Optimized for Jetson Nano Developer Kit
+
+# Core dependencies
+torch>=2.9.1+cu128
+torchvision>=0.24.1+cu128
+
+# Data processing
+numpy>=2.1.2
+opencv-python>=4.12.0.88
+Pillow>=11.3.0
+
+# Training utilities
+tqdm>=4.67.1
+matplotlib>=3.10.8
+
+# Optional: Logging and monitoring
+# tensorboard>=2.8.0
+# wandb>=0.12.0
+
+# Optional: Mixed precision training (included in PyTorch 2.0+)
+# For older PyTorch versions, uncomment:
+# apex @ git+https://github.com/NVIDIA/apex.git
+
+# Development utilities
+# jupyter>=1.0.0
+# ipython>=7.20.0
