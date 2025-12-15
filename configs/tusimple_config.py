@@ -6,8 +6,8 @@ Optimized for Jetson Nano deployment with ResNet18 backbone
 class Config:
     def __init__(self):
         # ============ Dataset Configuration ============
-        self.dataset = 'd:/code/dataset/tusimple/train_set'  # Path to TuSimple dataset
-        self.data_root = 'd:/code/2nd_ufld_lane_detection'  # Root directory
+        self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
+        self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
@@ -31,8 +31,8 @@ class Config:
         self.original_height = 720  # TuSimple original image height
         
         # ============ Training Configuration ============
-        self.batch_size = 8  # Reduce to 4 if OOM on Jetson Nano
-        self.epochs = 100
+        self.batch_size = 4  # Reduce to 4 if OOM on Jetson Nano
+        self.epochs = 20
         self.learning_rate = 4e-4
         self.weight_decay = 1e-4
         self.momentum = 0.9
