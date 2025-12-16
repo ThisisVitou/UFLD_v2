@@ -49,9 +49,9 @@ class TargetGenerator:
                 - seg_mask: Optional segmentation mask [H, W] (if use_aux=True)
         """
         
-        # Initialize targets with -1e5 (invalid)
-        loc_row = np.ones((self.num_cell_row, self.num_row, self.num_lanes), dtype=np.float32) * -1e5
-        loc_col = np.ones((self.num_cell_col, self.num_col, self.num_lanes), dtype=np.float32) * -1e5
+        # Initialize targets with -1 (invalid) for classification labels
+        loc_row = np.ones((self.num_row, self.num_lanes), dtype=np.int64) * -1
+        loc_col = np.ones((self.num_col, self.num_lanes), dtype=np.int64) * -1
         exist_row = np.zeros((self.num_row, self.num_lanes), dtype=np.long)
         exist_col = np.zeros((self.num_col, self.num_lanes), dtype=np.long)
         
@@ -76,13 +76,13 @@ class TargetGenerator:
             # Generate row-based targets (given y, predict x)
             row_targets = self._generate_row_targets(lane_x, lane_y)
             if row_targets is not None:
-                loc_row[:, :, lane_idx] = row_targets['loc']
+                loc_row[:, lane_idx] = row_targets['loc']  # Now [56, 4] shape
                 exist_row[:, lane_idx] = row_targets['exist']
             
             # Generate column-based targets (given x, predict y)
             col_targets = self._generate_col_targets(lane_x, lane_y)
             if col_targets is not None:
-                loc_col[:, :, lane_idx] = col_targets['loc']
+                loc_col[:, lane_idx] = col_targets['loc']  # Now [41, 4] shape
                 exist_col[:, lane_idx] = col_targets['exist']
         
         targets = {
@@ -101,86 +101,59 @@ class TargetGenerator:
     
     def _generate_row_targets(self, lane_x, lane_y):
         """
-        Generate row-based targets: given y (row anchor), predict x location
-        
-        For each row anchor position, find the corresponding x coordinate
-        and assign it to the appropriate grid cell
+        Generate row-based targets: predict which grid cell (0-99)
+        Returns classification labels, not regression offsets
         """
-        loc_targets = np.ones((self.num_cell_row, self.num_row), dtype=np.float32) * -1e5
-        exist_targets = np.zeros(self.num_row, dtype=np.long)
+        loc_targets = np.ones(self.num_row, dtype=np.int64) * -1
+        exist_targets = np.zeros(self.num_row, dtype=np.int64)
         
-        # For each row classification position
         for cls_idx in range(self.num_row):
-            y_pos = cls_idx / (self.num_row - 1)  # Normalized y position [0, 1]
+            y_pos = cls_idx / (self.num_row - 1)
             
-            # Check if lane exists at this y position
             if y_pos < lane_y.min() or y_pos > lane_y.max():
                 continue
             
-            # Interpolate x position at this y
             x_pos = np.interp(y_pos, lane_y, lane_x)
             
-            # Find closest row anchor cell
+            # CRITICAL: Store grid cell INDEX (0-99), not offset (0-1)
             cell_idx = int(x_pos * self.num_cell_row)
             cell_idx = np.clip(cell_idx, 0, self.num_cell_row - 1)
             
-            # Compute offset within cell
-            cell_start = cell_idx / self.num_cell_row
-            cell_end = (cell_idx + 1) / self.num_cell_row
-            offset = (x_pos - cell_start) / (cell_end - cell_start)
-            offset = np.clip(offset, 0, 1)
-            
-            # Assign target
-            loc_targets[cell_idx, cls_idx] = offset
+            loc_targets[cls_idx] = cell_idx  # Integer class label
             exist_targets[cls_idx] = 1
         
         return {'loc': loc_targets, 'exist': exist_targets}
     
     def _generate_col_targets(self, lane_x, lane_y):
         """
-        Generate column-based targets: given x (column anchor), predict y location
-        
-        For each column anchor position, find the corresponding y coordinate
+        Generate column-based targets: predict which grid cell (0-99)
         """
-        loc_targets = np.ones((self.num_cell_col, self.num_col), dtype=np.float32) * -1e5
-        exist_targets = np.zeros(self.num_col, dtype=np.long)
+        loc_targets = np.ones(self.num_col, dtype=np.int64) * -1
+        exist_targets = np.zeros(self.num_col, dtype=np.int64)
         
-        # For each column classification position  
         for cls_idx in range(self.num_col):
-            x_pos = cls_idx / (self.num_col - 1)  # Normalized x position [0, 1]
+            x_pos = cls_idx / (self.num_col - 1)
             
-            # Check if lane exists at this x position
             if x_pos < lane_x.min() or x_pos > lane_x.max():
                 continue
             
-            # Interpolate y position at this x
-            # Need to ensure lane_x is monotonic for interpolation
             if len(lane_x) < 2:
                 continue
-                
-            # Sort by x for interpolation
+            
             sorted_indices = np.argsort(lane_x)
             sorted_x = lane_x[sorted_indices]
             sorted_y = lane_y[sorted_indices]
             
-            # Check if x_pos is within range
             if x_pos < sorted_x[0] or x_pos > sorted_x[-1]:
                 continue
             
             y_pos = np.interp(x_pos, sorted_x, sorted_y)
             
-            # Find closest column anchor cell
+            # CRITICAL: Store grid cell INDEX (0-99), not offset (0-1)
             cell_idx = int(y_pos * self.num_cell_col)
             cell_idx = np.clip(cell_idx, 0, self.num_cell_col - 1)
             
-            # Compute offset within cell
-            cell_start = cell_idx / self.num_cell_col
-            cell_end = (cell_idx + 1) / self.num_cell_col
-            offset = (y_pos - cell_start) / (cell_end - cell_start)
-            offset = np.clip(offset, 0, 1)
-            
-            # Assign target
-            loc_targets[cell_idx, cls_idx] = offset
+            loc_targets[cls_idx] = cell_idx  # Integer class label
             exist_targets[cls_idx] = 1
         
         return {'loc': loc_targets, 'exist': exist_targets}

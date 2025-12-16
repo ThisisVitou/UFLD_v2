@@ -8,6 +8,57 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class ParsingRelationLoss(nn.Module):
+    """Enforce smoothness between adjacent row predictions"""
+    def __init__(self):
+        super(ParsingRelationLoss, self).__init__()
+        
+    def forward(self, logits):
+        """
+        Args:
+            logits: [B, num_grid, num_cls, num_lanes]
+        """
+        n, c, h, w = logits.shape
+        loss_all = []
+        
+        for i in range(h - 1):
+            loss_all.append(logits[:, :, i, :] - logits[:, :, i+1, :])
+        
+        loss = torch.cat(loss_all)
+        return F.smooth_l1_loss(loss, torch.zeros_like(loss))
+
+
+class ParsingRelationDis(nn.Module):
+    """Enforce consistent spacing between lanes"""
+    def __init__(self):
+        super(ParsingRelationDis, self).__init__()
+        self.l1 = nn.L1Loss()
+        
+    def forward(self, x):
+        """
+        Args:
+            x: [B, num_grid, num_cls, num_lanes]
+        """
+        n, dim, num_rows, num_cols = x.shape
+        
+        x_soft = F.softmax(x[:, :dim-1, :, :], dim=1)
+        embedding = torch.arange(dim-1, dtype=torch.float32, device=x.device).view(1, -1, 1, 1)
+        pos = torch.sum(x_soft * embedding, dim=1)
+        
+        diff_list = []
+        for i in range(num_rows // 2):
+            diff_list.append(pos[:, i, :] - pos[:, i+1, :])
+        
+        if len(diff_list) <= 1:
+            return x.sum() * 0
+        
+        loss = 0
+        for i in range(len(diff_list) - 1):
+            loss += self.l1(diff_list[i], diff_list[i+1])
+        
+        return loss / (len(diff_list) - 1)
+
+
 class UFLDLoss(nn.Module):
     """
     Composite loss for UFLD model
@@ -23,16 +74,22 @@ class UFLDLoss(nn.Module):
         self.cfg = cfg
         
         # Loss weights
-        self.loc_weight = cfg.loss_weights['loc']
-        self.exist_weight = cfg.loss_weights['exist']
-        self.seg_weight = cfg.loss_weights['seg']
+        self.loc_weight = cfg.loss_weights.get('loc', 1.0)
+        self.exist_weight = cfg.loss_weights.get('exist', 0.1)
+        self.seg_weight = cfg.loss_weights.get('seg', 1.0)
+        self.relation_weight = cfg.loss_weights.get('relation', 0.0)
+        self.relation_dis_weight = cfg.loss_weights.get('relation_dis', 0.0)
         
-        # Use auxiliary segmentation
         self.use_aux = cfg.use_aux
         
         # Loss functions
-        self.smoothl1_loss = nn.SmoothL1Loss(reduction='none')
         self.ce_loss = nn.CrossEntropyLoss()
+        
+        # Structural losses
+        if self.relation_weight > 0:
+            self.relation_loss = ParsingRelationLoss()
+        if self.relation_dis_weight > 0:
+            self.relation_dis_loss = ParsingRelationDis()
         
     def forward(self, predictions, targets):
         """
@@ -103,6 +160,23 @@ class UFLDLoss(nn.Module):
             'exist_loss': exist_loss
         }
         
+        # Add structural losses if enabled
+        if self.relation_weight > 0:
+            relation_loss_row = self.relation_loss(predictions['loc_row'])
+            relation_loss_col = self.relation_loss(predictions['loc_col'])
+            relation_loss = (relation_loss_row + relation_loss_col) / 2.0
+            total_loss = total_loss + self.relation_weight * relation_loss
+            loss_dict['relation_loss'] = relation_loss
+        
+        if self.relation_dis_weight > 0:
+            relation_dis_loss_row = self.relation_dis_loss(predictions['loc_row'])
+            relation_dis_loss_col = self.relation_dis_loss(predictions['loc_col'])
+            relation_dis_loss = (relation_dis_loss_row + relation_dis_loss_col) / 2.0
+            total_loss = total_loss + self.relation_dis_weight * relation_dis_loss
+            loss_dict['relation_dis_loss'] = relation_dis_loss
+        
+        loss_dict['total_loss'] = total_loss
+        
         # Segmentation loss (if auxiliary head is used)
         if self.use_aux and 'seg_out' in predictions:
             seg_loss = self._compute_segmentation_loss(
@@ -117,42 +191,30 @@ class UFLDLoss(nn.Module):
     
     def _compute_location_loss(self, pred_loc, target_loc, target_exist):
         """
-        Compute location regression loss
-        Only compute loss for existing lanes (where target_exist == 1)
+        Compute location classification loss using CrossEntropy
         
         Args:
-            pred_loc: [B, num_cell, num_cls, num_lanes]
-            target_loc: [B, num_cell, num_cls, num_lanes]
-            target_exist: [B, num_cls, num_lanes]
-        
-        Returns:
-            Scalar loss value
+            pred_loc: [B, num_grid=100, num_cls=56, num_lanes=4] - logits for 100 classes
+            target_loc: [B, num_cls=56, num_lanes=4] - ground truth grid cell indices (0-99)
+            target_exist: [B, num_cls=56, num_lanes=4] - lane existence (0 or 1)
         """
-        B, num_cell, num_cls, num_lanes = pred_loc.shape
+        B, num_grid, num_cls, num_lanes = pred_loc.shape
         
-        # Compute SmoothL1 loss
-        loss = self.smoothl1_loss(pred_loc, target_loc)  # [B, num_cell, num_cls, num_lanes]
+        # Reshape for CrossEntropyLoss
+        pred_loc = pred_loc.permute(0, 2, 3, 1).contiguous()  # [B, num_cls, num_lanes, num_grid]
+        pred_loc = pred_loc.view(-1, num_grid)  # [B*num_cls*num_lanes, num_grid]
         
-        # Create mask for valid locations (where lane exists)
-        # Expand target_exist to match loss shape
-        exist_mask = target_exist.unsqueeze(1)  # [B, 1, num_cls, num_lanes]
-        exist_mask = exist_mask.expand_as(loss)  # [B, num_cell, num_cls, num_lanes]
+        target_loc = target_loc.contiguous().view(-1)  # [B*num_cls*num_lanes]
         
-        # Mask for valid targets (not -1e5)
-        valid_mask = (target_loc > -1e4).float()
+        # Mask for valid targets (where lane exists and target >= 0)
+        valid_mask = (target_loc >= 0) & (target_exist.view(-1) == 1)
         
-        # Combined mask
-        mask = exist_mask.float() * valid_mask
-        
-        # Apply mask and compute mean
-        masked_loss = loss * mask
-        
-        # Avoid division by zero
-        num_valid = mask.sum()
-        if num_valid > 0:
-            return masked_loss.sum() / num_valid
+        if valid_mask.sum() > 0:
+            loss = F.cross_entropy(pred_loc[valid_mask], target_loc[valid_mask].long(), reduction='mean')
         else:
-            return masked_loss.sum()
+            loss = pred_loc.sum() * 0
+        
+        return loss
     
     def _compute_existence_loss(self, pred_exist, target_exist):
         """

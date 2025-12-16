@@ -44,9 +44,11 @@ class Config:
         
         # ============ Loss Weights ============
         self.loss_weights = {
-            'loc': 1.0,      # Location loss weight
-            'exist': 0.1,    # Existence loss weight
-            'seg': 1.0       # Segmentation loss weight (if use_aux=True)
+            'loc': 1.0,      # Location classification loss
+            'exist': 0.1,    # Existence classification loss
+            'seg': 1.0,      # Segmentation loss (if use_aux=True)
+            'relation': 0.0,      # Start at 0, can enable later
+            'relation_dis': 0.0   # Start at 0, can enable later
         }
         
         # ============ Data Augmentation ============
