@@ -41,8 +41,8 @@ class ParsingRelationDis(nn.Module):
         """
         n, dim, num_rows, num_cols = x.shape
         
-        x_soft = F.softmax(x[:, :dim-1, :, :], dim=1)
-        embedding = torch.arange(dim-1, dtype=torch.float32, device=x.device).view(1, -1, 1, 1)
+        x_soft = F.softmax(x, dim=1)  # Softmax over all num_grid classes
+        embedding = torch.arange(dim, dtype=torch.float32, device=x.device).view(1, -1, 1, 1)
         pos = torch.sum(x_soft * embedding, dim=1)
         
         diff_list = []
