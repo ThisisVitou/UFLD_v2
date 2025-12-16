@@ -6,8 +6,8 @@ Optimized for Jetson Nano deployment with ResNet18 backbone
 class Config:
     def __init__(self):
         # ============ Dataset Configuration ============
-        self.dataset = 'd:/code/dataset/tusimple/train_set'  # Path to TuSimple dataset
-        self.data_root = 'd:/code/2nd_ufld_lane_detection'  # Root directory
+        self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
+        self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
@@ -31,16 +31,20 @@ class Config:
         self.original_height = 720  # TuSimple original image height
         
         # ============ Training Configuration ============
-        self.batch_size = 8  # Reduce to 4 if OOM on Jetson Nano
+        self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
         self.epochs = 100
-        self.learning_rate = 4e-4
+        self.learning_rate = 0.05
         self.weight_decay = 1e-4
         self.momentum = 0.9
         
         # Learning rate scheduler
-        self.scheduler = 'cosine'  # Options: 'cosine', 'step', 'poly'
-        self.warmup_epochs = 5
-        self.min_lr = 1e-6
+        self.scheduler = 'multi'  # Options: 'cosine', 'step', 'poly'
+        self.steps = [50, 75],
+        self.gamma = 0.1,
+        self.warmup = 'linear',
+        self.warmup_iters = 100
+        # self.warmup_epochs = 5
+        # self.min_lr = 1e-6
         
         # ============ Loss Weights ============
         self.loss_weights = {
@@ -48,7 +52,8 @@ class Config:
             'exist': 0.1,    # Existence classification loss
             'seg': 1.0,      # Segmentation loss (if use_aux=True)
             'relation': 0.0,      # Start at 0, can enable later
-            'relation_dis': 0.0   # Start at 0, can enable later
+            'relation_dis': 0.00,   # Start at 0, can enable later
+            'mean_loss': 0.05
         }
         
         # ============ Data Augmentation ============

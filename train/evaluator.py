@@ -210,18 +210,22 @@ class TuSimpleEvaluator:
         Count correctly predicted points
         A point is correct if within threshold of GT
         """
-        threshold = 20  # pixels (TuSimple standard)
+        threshold = 20 / self.cfg.train_width  # pixels (TuSimple standard)
         
         # Find common y values
         gt_dict = {y: x for x, y in gt_lane}
         
         correct = 0
-        for x_pred, y in pred_lane:
-            if y in gt_dict:
-                x_gt = gt_dict[y]
-                if abs(x_pred - x_gt) < threshold:
-                    correct += 1
-        
+        for x_pred_norm, y_norm in pred_lane:
+            if y_norm in gt_dict:
+                x_gt_norm = gt_dict[y_norm]
+
+                #convert to pixel for comparison
+                x_pred_norm = x_pred_norm * self.cfg.train_width
+                x_gt_norm = x_gt_norm * self.cfg.train_width
+
+                if abs(x_pred_norm - x_gt_norm) < threshold:
+                    correct +=1
         return correct
     
     def compute_metrics(self):
