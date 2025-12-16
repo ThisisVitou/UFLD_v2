@@ -216,30 +216,25 @@ class UFLDLoss(nn.Module):
         
         return loss
     
-    def _compute_existence_loss(self, pred_exist, target_exist):
+    def _compute_existence_loss(self, pred_exist, target_exist, mask=None):
         """
-        Compute existence classification loss
-        
-        Args:
-            pred_exist: [B, 2, num_cls, num_lanes] (logits for binary classification)
-            target_exist: [B, num_cls, num_lanes] (0 or 1)
-        
-        Returns:
-            Scalar loss value
+        pred_exist: [B, 2, num_row, num_lanes] logits (class=0/1)
+        target_exist: [B, num_row, num_lanes] class indices {0,1}
         """
-        B, _, num_cls, num_lanes = pred_exist.shape
-        
-        # Reshape for CrossEntropyLoss
-        # pred: [B*num_cls*num_lanes, 2]
-        # target: [B*num_cls*num_lanes]
-        pred_exist = pred_exist.permute(0, 2, 3, 1).contiguous()  # [B, num_cls, num_lanes, 2]
-        pred_exist = pred_exist.view(-1, 2)  # [B*num_cls*num_lanes, 2]
-        
-        target_exist = target_exist.contiguous().view(-1)  # [B*num_cls*num_lanes]
-        
-        # Compute CrossEntropy loss
-        loss = self.ce_loss(pred_exist, target_exist)
-        
+        # Flatten to [N, 2] and [N]
+        B, C, R, K = pred_exist.shape
+        pred_exist_flat = pred_exist.permute(0, 2, 3, 1).reshape(-1, C)   # [B*R*K, 2]
+        target_exist_flat = target_exist.reshape(-1).contiguous()         # [B*R*K]
+
+        # Cast target to Long for CrossEntropyLoss
+        target_exist_flat = target_exist_flat.long()
+
+        if mask is not None:
+            mask_flat = mask.reshape(-1).bool()
+            pred_exist_flat = pred_exist_flat[mask_flat]
+            target_exist_flat = target_exist_flat[mask_flat]
+
+        loss = self.ce_loss(pred_exist_flat, target_exist_flat)
         return loss
     
     def _compute_segmentation_loss(self, pred_seg, target_seg):
