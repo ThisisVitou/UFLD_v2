@@ -115,7 +115,7 @@ class TargetGenerator:
             
             x_pos = np.interp(y_pos, lane_y, lane_x)
             
-            # CRITICAL: Store grid cell INDEX (0-99), not offset (0-1)
+            # NOTE: Store grid cell INDEX (0-99), not offset (0-1)
             cell_idx = int(x_pos * self.num_cell_row)
             cell_idx = np.clip(cell_idx, 0, self.num_cell_row - 1)
             
@@ -149,7 +149,7 @@ class TargetGenerator:
             
             y_pos = np.interp(x_pos, sorted_x, sorted_y)
             
-            # CRITICAL: Store grid cell INDEX (0-99), not offset (0-1)
+            # NOTE: Store grid cell INDEX (0-99), not offset (0-1)
             cell_idx = int(y_pos * self.num_cell_col)
             cell_idx = np.clip(cell_idx, 0, self.num_cell_col - 1)
             
