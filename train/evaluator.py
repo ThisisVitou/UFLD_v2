@@ -210,7 +210,7 @@ class TuSimpleEvaluator:
         Count correctly predicted points
         A point is correct if within threshold of GT
         """
-        threshold = 20 / self.cfg.train_width  # pixels (TuSimple standard)
+        threshold = 20  # pixels (TuSimple standard)
         
         # Find common y values
         gt_dict = {y: x for x, y in gt_lane}

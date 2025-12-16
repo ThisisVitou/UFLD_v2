@@ -98,6 +98,13 @@ class Trainer:
                 step_size=30,
                 gamma=0.1
             )
+        elif self.cfg.scheduler == 'multi':
+            from torch.optim.lr_scheduler import MultiStepLR
+            scheduler = MultiStepLR(
+                self.optimizer,
+                milestones=list(self.cfg.steps[0]),
+                gamma=self.cfg.gamma[0]
+            )
         else:
             scheduler = None
         

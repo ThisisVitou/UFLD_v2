@@ -36,12 +36,13 @@ class Config:
         self.learning_rate = 0.05
         self.weight_decay = 1e-4
         self.momentum = 0.9
+        self.otimizer = 'SGD'  # Options: 'SGD', 'Adam', 'AdamW'
         
         # Learning rate scheduler
         self.scheduler = 'multi'  # Options: 'cosine', 'step', 'poly'
-        self.steps = [50, 75],
-        self.gamma = 0.1,
-        self.warmup = 'linear',
+        self.steps = [50, 75]
+        self.gamma = 0.1
+        self.warmup = 'linear'
         self.warmup_iters = 100
         # self.warmup_epochs = 5
         # self.min_lr = 1e-6
