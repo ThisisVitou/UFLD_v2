@@ -36,7 +36,7 @@ class Config:
         self.learning_rate = 0.05
         self.weight_decay = 1e-4
         self.momentum = 0.9
-        self.otimizer = 'SGD'  # Options: 'SGD', 'Adam', 'AdamW'
+        self.optimizer = 'sgd'  # Options: 'sgd', 'adam', 'adamw'
         
         # Learning rate scheduler
         self.scheduler = 'multi'  # Options: 'cosine', 'step', 'poly'
