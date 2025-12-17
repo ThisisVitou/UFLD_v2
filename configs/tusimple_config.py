@@ -8,11 +8,8 @@ class Config:
         # ============ Dataset Configuration ============
         self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
         self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
-<<<<<<< HEAD
-=======
         #self.dataset = 'D://code//dataset//tusimple//train_set'  # Path to TuSimple dataset
         #self.data_root = 'D://code//2nd_ufld_lane_detection'  # Root directory
->>>>>>> seelanenow
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
@@ -36,15 +33,9 @@ class Config:
         self.original_height = 720  # TuSimple original image height
         
         # ============ Training Configuration ============
-<<<<<<< HEAD
-        self.batch_size = 4  # Reduce to 4 if OOM on Jetson Nano
-        self.epochs = 20
-        self.learning_rate = 4e-4
-=======
         self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
         self.epochs = 100
         self.learning_rate = 0.05
->>>>>>> seelanenow
         self.weight_decay = 1e-4
         self.momentum = 0.9
         self.optimizer = 'sgd'  # Options: 'sgd', 'adam', 'adamw'
