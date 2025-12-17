@@ -34,7 +34,7 @@ class Config:
         
         # ============ Training Configuration ============
         self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
-        self.epochs = 100
+        self.epochs = 50
         self.learning_rate = 0.05
         self.weight_decay = 1e-4
         self.momentum = 0.9
