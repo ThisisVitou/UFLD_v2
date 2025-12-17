@@ -8,8 +8,8 @@ class Config:
         # ============ Dataset Configuration ============
         self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
         self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
-        # self.dataset = 'D://code//dataset//tusimple//train_set'  # Path to TuSimple dataset
-        # self.data_root = 'D://code//2nd_ufld_lane_detection'  # Root directory
+        #self.dataset = 'D://code//dataset//tusimple//train_set'  # Path to TuSimple dataset
+        #self.data_root = 'D://code//2nd_ufld_lane_detection'  # Root directory
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
@@ -34,8 +34,8 @@ class Config:
         
         # ============ Training Configuration ============
         self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
-        self.epochs = 25
-        self.learning_rate = 0.005
+        self.epochs = 100
+        self.learning_rate = 0.05
         self.weight_decay = 1e-4
         self.momentum = 0.9
         self.optimizer = 'sgd'  # Options: 'sgd', 'adam', 'adamw'
@@ -95,7 +95,16 @@ class Config:
         self.h_samples = list(range(160, 711, 10))
         
         # Lane matching threshold for evaluation
-        self.match_threshold = 0.9
+        self.match_threshold = 0.85  # Lane matching threshold for TuSimple
+        self.val_split = 0.1  # 10% validation split
+        self.val_interval = 1  # Validate every N epochs
+        self.save_interval = 5  # Save checkpoint every N epochs
+        self.log_interval = 10  # Log every N batches
+        self.keep_last_n = 5  # Keep last N checkpoints
+        self.gradient_clip = 0  # No gradient clipping (0 = disabled)
+        self.mixed_precision = False  # Disable mixed precision for stability
+        self.num_workers = 4  # DataLoader workers
+        self.pin_memory = True  # Pin memory for faster GPU transfer
         
         # ============ Jetson Nano Optimizations ============
         self.mixed_precision = True  # Enable FP16 training if supported
