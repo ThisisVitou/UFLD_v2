@@ -184,55 +184,63 @@ class TuSimpleEvaluator:
     
     def _compute_lane_distance(self, lane1, lane2):
         """
-        Compute distance between two lanes
-        Uses average point-to-point distance at matching row indices
+        Compute distance between two lanes by matching row indices
         """
-        # Convert to dictionaries:  y_norm -> x_norm
-        lane1_dict = {y: x for x, y in lane1}
-        lane2_dict = {y: x for x, y in lane2}
+        # Convert normalized y to row indices for reliable matching
+        lane1_dict = {}
+        for x, y in lane1:
+            row_idx = round(y * (self.cfg.num_row - 1))
+            lane1_dict[row_idx] = x
         
-        # Find common y values (with tolerance for float comparison)
-        common_y = []
-        for y1 in lane1_dict. keys():
-            for y2 in lane2_dict.keys():
-                if abs(y1 - y2) < 1e-6:  # Float tolerance
-                    common_y.append((y1, y2))
-                    break
+        lane2_dict = {}
+        for x, y in lane2:
+            row_idx = round(y * (self.cfg.num_row - 1))
+            lane2_dict[row_idx] = x
         
-        if len(common_y) == 0:
+        # Find common row indices
+        common_rows = set(lane1_dict.keys()).intersection(set(lane2_dict.keys()))
+        
+        if len(common_rows) == 0:
             return 1.0  # Maximum distance
         
-        # Compute distances at common y positions
+        # Compute average distance
         distances = []
-        for y1, y2 in common_y: 
-            x1 = lane1_dict[y1]
-            x2 = lane2_dict[y2]
-            dist = abs(x1 - x2)  # Already normalized
+        for row_idx in common_rows:
+            x1 = lane1_dict[row_idx]
+            x2 = lane2_dict[row_idx]
+            dist = abs(x1 - x2)  # Already normalized [0, 1]
             distances.append(dist)
         
         return np.mean(distances)
     
     def _count_matching_points(self, pred_lane, gt_lane):
         """
-        Count correctly predicted points
-        A point is correct if within threshold of GT
+        Count correctly predicted points (TuSimple:  20 pixel threshold)
         """
-        threshold = 20  # pixels (TuSimple standard)
+        threshold_pixels = 20  # TuSimple standard
+        threshold_norm = threshold_pixels / self.cfg.train_width  # Normalize to [0, 1]
         
-        # Find common y values
-        gt_dict = {y: x for x, y in gt_lane}
+        # Convert to dict:  row_idx -> x_norm
+        pred_dict = {}
+        for x, y in pred_lane: 
+            row_idx = round(y * (self.cfg.num_row - 1))
+            pred_dict[row_idx] = x
         
+        gt_dict = {}
+        for x, y in gt_lane:
+            row_idx = round(y * (self.cfg.num_row - 1))
+            gt_dict[row_idx] = x
+        
+        # Count matches
         correct = 0
-        for x_pred_norm, y_norm in pred_lane:
-            if y_norm in gt_dict:
-                x_gt_norm = gt_dict[y_norm]
-
-                #convert to pixel for comparison
-                x_pred_norm = x_pred_norm * self.cfg.train_width
-                x_gt_norm = x_gt_norm * self.cfg.train_width
-
-                if abs(x_pred_norm - x_gt_norm) < threshold:
-                    correct +=1
+        for row_idx in pred_dict. keys():
+            if row_idx in gt_dict: 
+                x_pred = pred_dict[row_idx]
+                x_gt = gt_dict[row_idx]
+                
+                if abs(x_pred - x_gt) < threshold_norm:
+                    correct += 1
+        
         return correct
     
     def compute_metrics(self):
