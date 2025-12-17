@@ -15,13 +15,13 @@ class UFLDLoss(nn.Module):
         self.exist_loss_fn = nn.CrossEntropyLoss()
         
         # Structural losses
-        self.relation_loss_fn = ParsingRelationLoss()
+        self. relation_loss_fn = ParsingRelationLoss()
         self.relation_dis_fn = ParsingRelationDis()
         
         # Loss weights from config
         self.mean_loss_w = cfg.loss_weights.get('mean_loss', 0.05)
         self.sim_loss_w = cfg.loss_weights.get('relation', 0.0)
-        self.shp_loss_w = cfg.loss_weights.get('relation_dis', 0.0)
+        self.shp_loss_w = cfg. loss_weights.get('relation_dis', 0.0)
         
         self.use_aux = cfg.use_aux
         
@@ -33,7 +33,7 @@ class UFLDLoss(nn.Module):
             - exist_row: [B, 2, 56, 4] - binary classification
             - exist_col: [B, 2, 41, 4]
         
-        targets: dict with keys:
+        targets: dict with keys: 
             - loc_row: [B, 56, 4] - class indices 0-99
             - loc_col: [B, 41, 4]
             - exist_row: [B, 56, 4] - 0 or 1
@@ -45,17 +45,19 @@ class UFLDLoss(nn.Module):
         pred_loc_row = predictions['loc_row']  # [B, 100, 56, 4]
         target_loc_row = targets['loc_row']    # [B, 56, 4]
         
-        # Reshape:  [B, 100, 56, 4] -> [B*56*4, 100]
+        # KEEP 4D shape for SoftmaxFocalLoss!  
+        # Reshape target to match:  [B, 56, 4] -> [B, 1, 56, 4] -> squeeze later in loss
         B, C, H, W = pred_loc_row.shape
-        pred_loc_row_flat = pred_loc_row.permute(0, 2, 3, 1).reshape(-1, C)
-        target_loc_row_flat = target_loc_row. reshape(-1)
         
-        cls_loss_row = self.cls_loss_fn(pred_loc_row_flat, target_loc_row_flat)
+        # SoftmaxFocalLoss expects:  logits [B, C, H, W], labels [B, H, W]
+        # So we need to treat the 4 lanes as separate samples
+        # Reshape:  [B, C=100, H=56, W=4] and [B, H=56, W=4]
+        cls_loss_row = self.cls_loss_fn(pred_loc_row, target_loc_row)
         
         # 2. Mean loss (regression on expected position)
-        mean_loss_row = self.mean_loss_fn(pred_loc_row, target_loc_row)
+        mean_loss_row = self. mean_loss_fn(pred_loc_row, target_loc_row)
         
-        # 3. Existence loss
+        # 3. Existence loss (flatten is OK for CrossEntropy)
         pred_exist_row = predictions['exist_row']  # [B, 2, 56, 4]
         target_exist_row = targets['exist_row']     # [B, 56, 4]
         
@@ -65,30 +67,26 @@ class UFLDLoss(nn.Module):
         exist_loss_row = self.exist_loss_fn(pred_exist_row_flat, target_exist_row_flat)
         
         # === COLUMN LOSSES (same structure) ===
-        pred_loc_col = predictions['loc_col']
-        target_loc_col = targets['loc_col']
+        pred_loc_col = predictions['loc_col']  # [B, 100, 41, 4]
+        target_loc_col = targets['loc_col']    # [B, 41, 4]
         
-        B, C, H, W = pred_loc_col.shape
-        pred_loc_col_flat = pred_loc_col.permute(0, 2, 3, 1).reshape(-1, C)
-        target_loc_col_flat = target_loc_col.reshape(-1)
-        
-        cls_loss_col = self.cls_loss_fn(pred_loc_col_flat, target_loc_col_flat)
+        cls_loss_col = self.cls_loss_fn(pred_loc_col, target_loc_col)
         mean_loss_col = self.mean_loss_fn(pred_loc_col, target_loc_col)
         
         pred_exist_col = predictions['exist_col']
         target_exist_col = targets['exist_col']
         
         pred_exist_col_flat = pred_exist_col.permute(0, 2, 3, 1).reshape(-1, 2)
-        target_exist_col_flat = target_exist_col. reshape(-1).long()
+        target_exist_col_flat = target_exist_col.reshape(-1).long()
         
         exist_loss_col = self.exist_loss_fn(pred_exist_col_flat, target_exist_col_flat)
         
         # === STRUCTURAL LOSSES ===
         relation_loss_row = self.relation_loss_fn(predictions['loc_row'])
-        relation_loss_col = self.relation_loss_fn(predictions['loc_col'])
+        relation_loss_col = self. relation_loss_fn(predictions['loc_col'])
         relation_loss = (relation_loss_row + relation_loss_col) / 2.0
         
-        relation_dis_row = self.relation_dis_fn(predictions['loc_row'])
+        relation_dis_row = self. relation_dis_fn(predictions['loc_row'])
         relation_dis_col = self.relation_dis_fn(predictions['loc_col'])
         relation_dis = (relation_dis_row + relation_dis_col) / 2.0
         
@@ -104,9 +102,9 @@ class UFLDLoss(nn.Module):
         loss_dict = {
             'total_loss': total_loss,
             'cls_loss':  (cls_loss_row + cls_loss_col) / 2,
-            'mean_loss': (mean_loss_row + mean_loss_col) / 2,
-            'exist_loss': (exist_loss_row + exist_loss_col) / 2,
-            'relation_loss': relation_loss,
+            'mean_loss':  (mean_loss_row + mean_loss_col) / 2,
+            'exist_loss':  (exist_loss_row + exist_loss_col) / 2,
+            'relation_loss':  relation_loss,
             'relation_dis': relation_dis
         }
         

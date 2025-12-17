@@ -6,8 +6,10 @@ Optimized for Jetson Nano deployment with ResNet18 backbone
 class Config:
     def __init__(self):
         # ============ Dataset Configuration ============
-        self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
-        self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
+        # self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
+        # self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
+        self.dataset = 'D://code//dataset//tusimple//train_set'  # Path to TuSimple dataset
+        self.data_root = 'D://code//2nd_ufld_lane_detection'  # Root directory
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
