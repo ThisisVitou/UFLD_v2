@@ -16,7 +16,7 @@ class Config:
         # ============ Model Configuration ============
         self.backbone = '18'  # ResNet18 - lightweight for Jetson Nano
         self.pretrained = True  # Use ImageNet pretrained weights
-        self.use_aux = True  # Enable auxiliary segmentation head
+        self.use_aux = False  # Enable auxiliary segmentation head
         self.fc_norm = False  # Use LayerNorm before FC layers
         
         # Grid-based anchor configuration (standard UFLD settings for TuSimple)

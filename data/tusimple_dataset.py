@@ -36,6 +36,11 @@ class TuSimpleDataset(Dataset):
         # Load annotations
         gt_file = os.path.join(cfg.data_root, cfg.train_gt_file)
         self.samples = self._load_annotations(gt_file)
+
+        if cfg.val_split > 0:
+            import random
+            random.seed(42)
+            random.shuffle(self.samples)
         
         # Split train/val if needed
         if mode == 'val':
