@@ -185,22 +185,29 @@ class TuSimpleEvaluator:
     def _compute_lane_distance(self, lane1, lane2):
         """
         Compute distance between two lanes
-        Uses average point-to-point distance
+        Uses average point-to-point distance at matching row indices
         """
-        # Find common y range
-        y1 = set([y for _, y in lane1])
-        y2 = set([y for _, y in lane2])
-        common_y = y1.intersection(y2)
+        # Convert to dictionaries:  y_norm -> x_norm
+        lane1_dict = {y: x for x, y in lane1}
+        lane2_dict = {y: x for x, y in lane2}
+        
+        # Find common y values (with tolerance for float comparison)
+        common_y = []
+        for y1 in lane1_dict. keys():
+            for y2 in lane2_dict.keys():
+                if abs(y1 - y2) < 1e-6:  # Float tolerance
+                    common_y.append((y1, y2))
+                    break
         
         if len(common_y) == 0:
             return 1.0  # Maximum distance
         
-        # Interpolate x values at common y positions
+        # Compute distances at common y positions
         distances = []
-        for y in common_y:
-            x1 = [x for x, y_val in lane1 if y_val == y][0]
-            x2 = [x for x, y_val in lane2 if y_val == y][0]
-            dist = abs(x1 - x2) / self.cfg.train_width  # Normalized distance
+        for y1, y2 in common_y: 
+            x1 = lane1_dict[y1]
+            x2 = lane2_dict[y2]
+            dist = abs(x1 - x2)  # Already normalized
             distances.append(dist)
         
         return np.mean(distances)

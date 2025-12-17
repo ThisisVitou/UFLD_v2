@@ -28,7 +28,7 @@ class Config:
         # ============ Input Configuration ============
         # Jetson Nano optimized: 800x288 (can reduce to 640x360 if memory constrained)
         self.train_width = 800
-        self.train_height = 288
+        self.train_height = 320
         self.original_width = 1280  # TuSimple original image width
         self.original_height = 720  # TuSimple original image height
         
@@ -95,7 +95,16 @@ class Config:
         self.h_samples = list(range(160, 711, 10))
         
         # Lane matching threshold for evaluation
-        self.match_threshold = 0.9
+        self.match_threshold = 0.85  # Lane matching threshold for TuSimple
+        self.val_split = 0.1  # 10% validation split
+        self.val_interval = 1  # Validate every N epochs
+        self.save_interval = 5  # Save checkpoint every N epochs
+        self.log_interval = 10  # Log every N batches
+        self.keep_last_n = 5  # Keep last N checkpoints
+        self.gradient_clip = 0  # No gradient clipping (0 = disabled)
+        self.mixed_precision = False  # Disable mixed precision for stability
+        self.num_workers = 4  # DataLoader workers
+        self.pin_memory = True  # Pin memory for faster GPU transfer
         
         # ============ Jetson Nano Optimizations ============
         self.mixed_precision = True  # Enable FP16 training if supported
