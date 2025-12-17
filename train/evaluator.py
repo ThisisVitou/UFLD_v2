@@ -32,119 +32,80 @@ class TuSimpleEvaluator:
         self.total_fn = 0  # False negatives (missed lanes)
         self.total_samples = 0
     
-    def update(self, predictions, targets, h_samples=None):
-        """
-        Update metrics with batch predictions
-        
-        Args:
-            predictions: Dictionary with model outputs
-                - loc_row: [B, num_cell_row, num_row, num_lanes]
-                - exist_row: [B, 2, num_row, num_lanes]
-            targets: Dictionary with ground truth
-                - loc_row: [B, num_cell_row, num_row, num_lanes]
-                - exist_row: [B, num_row, num_lanes]
-            h_samples: List of y-coordinates for evaluation
-        """
-        if h_samples is None:
-            h_samples = self.cfg.h_samples
-        
-        batch_size = predictions['loc_row'].shape[0]
-        
-        for b in range(batch_size):
-            # Decode predictions to lane points
-            pred_lanes = self._decode_lanes(
-                predictions['loc_row'][b],
-                predictions['exist_row'][b],
-                h_samples
-            )
-            
-            # Decode ground truth
-            gt_lanes = self._decode_lanes(
-                targets['loc_row'][b],
-                targets['exist_row'][b],
-                h_samples,
-                is_gt=True
-            )
-            
-            # Compute metrics for this sample
-            self._evaluate_sample(pred_lanes, gt_lanes)
+    def update(self, predictions, targets):
+        pred_loc = predictions['loc_row']            # [B, G, R, K]
+        pred_exist = predictions['exist_row']        # [B, 2, R, K] or [B, R, K]
+        tgt_loc = targets['loc_row']                 # [B, R, K] (class indices) OR [B, G, R, K]
+        tgt_exist = targets['exist_row']             # [B, R, K]
+
+        # Normalize pred_exist to [B, R, K] (prob of class=1)
+        if pred_exist.dim() == 4 and pred_exist.size(1) == 2:
+            pred_exist = torch.softmax(pred_exist, dim=1)[:, 1]  # [B, R, K]
+
+        # Shapes
+        B, G, R, K = pred_loc.shape
+
+        # Decode predictions (logits)
+        pred_lanes = self._decode_lanes(pred_loc, pred_exist, G, R, K)
+
+        # Decode GT:
+        # If provided as logits [B, G, R, K], convert to class indices
+        if tgt_loc.dim() == 4 and tgt_loc.shape[1] == G:
+            # argmax over grid dim -> [B, R, K]
+            tgt_loc = torch.argmax(tgt_loc, dim=1)
+        # Now tgt_loc must be [B, R, K] class indices
+        gt_lanes = self._decode_lanes(tgt_loc, tgt_exist, G, R, K)
+
+        # Accumulate metrics per sample
+        for i in range(B):
+            self._evaluate_sample(pred_lanes[i], gt_lanes[i])
             self.total_samples += 1
     
-    def _decode_lanes(self, loc, exist, h_samples, is_gt=False):
+    def _decode_lanes(self, loc, exist, num_grid, num_row, num_lanes):
         """
-        Decode grid-based predictions to lane points
-        
-        Args:
-            loc: [num_cell_row, num_row, num_lanes]
-            exist: [2, num_row, num_lanes] or [num_row, num_lanes] for GT
-            h_samples: List of y-coordinates
-            is_gt: Whether this is ground truth
-        
-        Returns:
-            List of lanes, each lane is list of (x, y) points
+        loc: either [B, num_grid, num_row, num_lanes] logits (pred) 
+             or [B, num_row, num_lanes] class indices (target)
+        exist: [B, num_row, num_lanes] existence (0/1 or prob)
         """
-        num_lanes = loc.shape[-1]
-        lanes = []
-        
-        # Convert to numpy if tensor
-        if torch.is_tensor(loc):
-            loc = loc.cpu().numpy()
-        if torch.is_tensor(exist):
-            exist = exist.cpu().numpy()
-        
-        # Process each lane
-        for lane_idx in range(num_lanes):
-            lane_points = []
-            
-            for cls_idx in range(len(h_samples)):
-                y = h_samples[cls_idx]
-                
-                # Check if lane exists at this position
-                if is_gt:
-                    exists = exist[cls_idx, lane_idx] > 0.5
-                else:
-                    # For predictions, use softmax
-                    exist_prob = exist[:, cls_idx, lane_idx]
-                    exists = exist_prob[1] > exist_prob[0]  # Class 1 (exists) > Class 0 (not exists)
-                
-                if not exists:
-                    continue
-                
-                # Get location prediction
-                loc_values = loc[:, cls_idx, lane_idx]
-                
-                # Find valid predictions (not -1e5)
-                valid_mask = loc_values > -1e4
-                if not valid_mask.any():
-                    continue
-                
-                # Find cell with highest confidence (or first valid cell)
-                valid_cells = np.where(valid_mask)[0]
-                if len(valid_cells) == 0:
-                    continue
-                
-                # Use first valid cell (could use argmax for multi-cell predictions)
-                cell_idx = valid_cells[0]
-                offset = loc_values[cell_idx]
-                
-                # Convert cell index and offset to x coordinate
-                cell_start = cell_idx / loc.shape[0]
-                cell_size = 1.0 / loc.shape[0]
-                x_norm = cell_start + offset * cell_size
-                
-                # Convert to pixel coordinates
-                x = x_norm * self.cfg.train_width
-                
-                # Clip to image bounds
-                x = np.clip(x, 0, self.cfg.train_width - 1)
-                
-                lane_points.append((x, y))
-            
-            # Only add lanes with sufficient points
-            if len(lane_points) >= 2:
-                lanes.append(lane_points)
-        
-        return lanes
+        import torch
+        lanes_batch = []
+        B = exist.shape[0]
+
+        is_pred_logits = (loc.dim() == 4 and loc.shape[1] == num_grid)
+        for b in range(B):
+            lanes = []
+            for k in range(num_lanes):
+                pts = []
+                for r in range(num_row):
+                    # existence check
+                    ex = exist[b, r, k]
+                    if isinstance(ex, torch.Tensor):
+                        ex_val = ex.item() if ex.dim() == 0 else float(ex)
+                    else:
+                        ex_val = float(ex)
+                    if ex_val < 0.5:
+                        continue
+
+                    if is_pred_logits:
+                        # pick grid cell by argmax from logits
+                        col = loc[b, :, r, k]  # [num_grid]
+                        ci = torch.argmax(col).item()
+                        off = 0.5  # if you have offsets, decode them; else center of cell
+                    else:
+                        # class index target already provided
+                        ci = int(loc[b, r, k])
+                        if ci < 0 or ci >= num_grid:
+                            continue
+                        off = 0.5
+
+                    cell_w = 1.0 / num_grid
+                    x_norm = (ci * cell_w) + (off * cell_w)
+                    y_norm = r / (num_row - 1) if num_row > 1 else 0.5
+                    pts.append((x_norm, y_norm))
+                if len(pts) >= 2:
+                    lanes.append(pts)
+            lanes_batch.append(lanes)
+        return lanes_batch
     
     def _evaluate_sample(self, pred_lanes, gt_lanes):
         """
@@ -224,22 +185,29 @@ class TuSimpleEvaluator:
     def _compute_lane_distance(self, lane1, lane2):
         """
         Compute distance between two lanes
-        Uses average point-to-point distance
+        Uses average point-to-point distance at matching row indices
         """
-        # Find common y range
-        y1 = set([y for _, y in lane1])
-        y2 = set([y for _, y in lane2])
-        common_y = y1.intersection(y2)
+        # Convert to dictionaries:  y_norm -> x_norm
+        lane1_dict = {y: x for x, y in lane1}
+        lane2_dict = {y: x for x, y in lane2}
+        
+        # Find common y values (with tolerance for float comparison)
+        common_y = []
+        for y1 in lane1_dict. keys():
+            for y2 in lane2_dict.keys():
+                if abs(y1 - y2) < 1e-6:  # Float tolerance
+                    common_y.append((y1, y2))
+                    break
         
         if len(common_y) == 0:
             return 1.0  # Maximum distance
         
-        # Interpolate x values at common y positions
+        # Compute distances at common y positions
         distances = []
-        for y in common_y:
-            x1 = [x for x, y_val in lane1 if y_val == y][0]
-            x2 = [x for x, y_val in lane2 if y_val == y][0]
-            dist = abs(x1 - x2) / self.cfg.train_width  # Normalized distance
+        for y1, y2 in common_y: 
+            x1 = lane1_dict[y1]
+            x2 = lane2_dict[y2]
+            dist = abs(x1 - x2)  # Already normalized
             distances.append(dist)
         
         return np.mean(distances)
@@ -255,12 +223,16 @@ class TuSimpleEvaluator:
         gt_dict = {y: x for x, y in gt_lane}
         
         correct = 0
-        for x_pred, y in pred_lane:
-            if y in gt_dict:
-                x_gt = gt_dict[y]
-                if abs(x_pred - x_gt) < threshold:
-                    correct += 1
-        
+        for x_pred_norm, y_norm in pred_lane:
+            if y_norm in gt_dict:
+                x_gt_norm = gt_dict[y_norm]
+
+                #convert to pixel for comparison
+                x_pred_norm = x_pred_norm * self.cfg.train_width
+                x_gt_norm = x_gt_norm * self.cfg.train_width
+
+                if abs(x_pred_norm - x_gt_norm) < threshold:
+                    correct +=1
         return correct
     
     def compute_metrics(self):

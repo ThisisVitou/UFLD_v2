@@ -8,6 +8,11 @@ class Config:
         # ============ Dataset Configuration ============
         self.dataset = '/home/sswaterlab/Documents/Norakvitou/archive/TUSimple/train_set'  # Path to TuSimple dataset
         self.data_root = '/home/sswaterlab/Documents/Norakvitou/UFLD_v2'  # Root directory
+<<<<<<< HEAD
+=======
+        #self.dataset = 'D://code//dataset//tusimple//train_set'  # Path to TuSimple dataset
+        #self.data_root = 'D://code//2nd_ufld_lane_detection'  # Root directory
+>>>>>>> seelanenow
         self.train_gt_file = 'train_gt.txt'  # Ground truth file
         self.num_lanes = 4  # Maximum number of lanes in TuSimple
         
@@ -26,27 +31,41 @@ class Config:
         # ============ Input Configuration ============
         # Jetson Nano optimized: 800x288 (can reduce to 640x360 if memory constrained)
         self.train_width = 800
-        self.train_height = 288
+        self.train_height = 320
         self.original_width = 1280  # TuSimple original image width
         self.original_height = 720  # TuSimple original image height
         
         # ============ Training Configuration ============
+<<<<<<< HEAD
         self.batch_size = 4  # Reduce to 4 if OOM on Jetson Nano
         self.epochs = 20
         self.learning_rate = 4e-4
+=======
+        self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
+        self.epochs = 100
+        self.learning_rate = 0.05
+>>>>>>> seelanenow
         self.weight_decay = 1e-4
         self.momentum = 0.9
+        self.optimizer = 'sgd'  # Options: 'sgd', 'adam', 'adamw'
         
         # Learning rate scheduler
-        self.scheduler = 'cosine'  # Options: 'cosine', 'step', 'poly'
-        self.warmup_epochs = 5
-        self.min_lr = 1e-6
+        self.scheduler = 'multi'  # Options: 'cosine', 'step', 'poly'
+        self.steps = [50, 75]
+        self.gamma = 0.1
+        self.warmup = 'linear'
+        self.warmup_iters = 100
+        # self.warmup_epochs = 5
+        # self.min_lr = 1e-6
         
         # ============ Loss Weights ============
         self.loss_weights = {
-            'loc': 1.0,      # Location loss weight
-            'exist': 0.1,    # Existence loss weight
-            'seg': 1.0       # Segmentation loss weight (if use_aux=True)
+            'loc': 1.0,      # Location classification loss
+            'exist': 0.1,    # Existence classification loss
+            'seg': 1.0,      # Segmentation loss (if use_aux=True)
+            'relation': 0.0,      # Start at 0, can enable later
+            'relation_dis': 0.00,   # Start at 0, can enable later
+            'mean_loss': 0.05
         }
         
         # ============ Data Augmentation ============
@@ -85,7 +104,16 @@ class Config:
         self.h_samples = list(range(160, 711, 10))
         
         # Lane matching threshold for evaluation
-        self.match_threshold = 0.9
+        self.match_threshold = 0.85  # Lane matching threshold for TuSimple
+        self.val_split = 0.1  # 10% validation split
+        self.val_interval = 1  # Validate every N epochs
+        self.save_interval = 5  # Save checkpoint every N epochs
+        self.log_interval = 10  # Log every N batches
+        self.keep_last_n = 5  # Keep last N checkpoints
+        self.gradient_clip = 0  # No gradient clipping (0 = disabled)
+        self.mixed_precision = False  # Disable mixed precision for stability
+        self.num_workers = 4  # DataLoader workers
+        self.pin_memory = True  # Pin memory for faster GPU transfer
         
         # ============ Jetson Nano Optimizations ============
         self.mixed_precision = True  # Enable FP16 training if supported

@@ -98,6 +98,13 @@ class Trainer:
                 step_size=30,
                 gamma=0.1
             )
+        elif self.cfg.scheduler == 'multi': 
+            from torch.optim.lr_scheduler import MultiStepLR
+            return MultiStepLR(
+                self.optimizer,
+                milestones=self.cfg.steps,
+                gamma=self.cfg.gamma
+            )
         else:
             scheduler = None
         
@@ -175,6 +182,21 @@ class Trainer:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.gradient_clip)
                 
                 self.optimizer.step()
+            
+            # Debug verification on first iteration
+            if batch_idx == 0 and self.current_epoch == 0:
+                print("\n" + "="*60)
+                print("DEBUG: First Iteration Verification")
+                print("="*60)
+                print(f"Model outputs:")
+                print(f"  loc_row shape: {predictions['loc_row'].shape}")  # Should be [B, 100, 56, 4]
+                print(f"  loc_row range: [{predictions['loc_row'].min():.2f}, {predictions['loc_row'].max():.2f}]")
+                print(f"\nTargets:")
+                print(f"  loc_row shape: {targets['loc_row'].shape}")  # Should be [B, 56, 4]
+                print(f"  loc_row dtype: {targets['loc_row'].dtype}")  # Should be torch.int64
+                print(f"  loc_row range: [{targets['loc_row'].min()}, {targets['loc_row'].max()}]")  # Should be [-1, 99]
+                print(f"  exist_row range: [{targets['exist_row'].min()}, {targets['exist_row'].max()}]")
+                print("="*60 + "\n")
             
             # Accumulate losses
             epoch_loss += loss.item()

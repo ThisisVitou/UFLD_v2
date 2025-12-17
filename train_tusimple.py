@@ -96,6 +96,21 @@ def main():
         traceback.print_exc()
         return
     
+    print(f"Train set size: {len(train_loader.dataset)}")
+    print(f"Val se size: {len(val_loader.dataset)}")
+
+    train_paths = set()
+    val_paths = set()
+    for batch in train_loader:
+        train_paths.update(batch.get('img_paths', []))
+    for batch in val_loader:
+        val_paths.update(batch.get('img_paths', []))
+
+    overlap = train_paths.intersection(val_paths)
+    print(f"Overlapping samples: {len(overlap)}")
+    if len(overlap) > 0:
+        print("WARNING: Train/Val sets overlap! Your accuracy will be shit.")
+    
     # Create model
     print("\n" + "-"*60)
     print("Initializing Model...")

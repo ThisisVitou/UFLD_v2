@@ -28,71 +28,52 @@ def decode_predictions(predictions, cfg, threshold=0.5):
     import torch
     
     batch_size = predictions['loc_row'].shape[0]
-    num_cell_row = predictions['loc_row'].shape[1]  # Get from actual tensor shape
-    num_row = predictions['loc_row'].shape[2]
-    num_lanes = predictions['loc_row'].shape[3]
+    num_cell_row = predictions['loc_row'].shape[1]  # 100
+    num_row = predictions['loc_row'].shape[2]       # 56
+    num_lanes = predictions['loc_row'].shape[3]     # 4
     
     all_lanes = []
     
     for b in range(batch_size):
         batch_lanes = []
         
-        # Process each lane
         for lane_idx in range(num_lanes):
             lane_points = []
             
-            # Get location and existence predictions for this lane
-            loc_row = predictions['loc_row'][b, :, :, lane_idx]  # [num_cell_row, num_row]
+            loc_row = predictions['loc_row'][b, :, : , lane_idx]  # [100, 56]
             
-            # Handle existence - could be [2, num_row, num_lanes] or [num_row, num_lanes]
-            if predictions['exist_row'].dim() == 4:  # [B, 2, num_row, num_lanes]
+            # Handle existence
+            if predictions['exist_row']. dim() == 4:
                 exist_row = torch.softmax(predictions['exist_row'][b, :, :, lane_idx], dim=0)
-                exist_prob = exist_row[1]  # Probability of existence
-            else:  # [B, num_row, num_lanes]
+                exist_prob = exist_row[1]  # [56]
+            else:
                 exist_prob = predictions['exist_row'][b, :, lane_idx]
             
-            # For each row position
             for row_idx in range(num_row):
-                # Check if lane exists at this row
                 if exist_prob[row_idx] < threshold:
                     continue
                 
-                # Get location prediction for this row
-                loc_pred = loc_row[:, row_idx]  # [num_cell_row]
+                # ✅ CORRECT WAY: argmax to get grid cell index
+                loc_logits = loc_row[: , row_idx]  # [100]
+                max_cell = torch.argmax(loc_logits).item()
                 
-                # Find the cell with maximum value (which grid cell contains the lane)
-                max_cell = torch.argmax(loc_pred).item()
-                offset = loc_pred[max_cell].item()
-                
-                # Skip if offset is invalid (uninitialized target value)
-                if offset < -1e4 or offset > 1.0 or offset < 0.0:
-                    continue
-                
-                # Convert cell index + offset to normalized x coordinate [0, 1]
-                # max_cell is in range [0, num_cell_row-1]
-                # offset is in range [0, 1] (position within the cell)
+                # Use cell center (no offset available from classification)
                 cell_width = 1.0 / num_cell_row
-                x_normalized = (max_cell * cell_width) + (offset * cell_width)
+                x_normalized = (max_cell + 0.5) * cell_width  # Cell center
                 
-                # Clamp to valid range
-                x_normalized = max(0.0, min(1.0, x_normalized))
-                
-                # Convert row index to normalized y coordinate [0, 1]
-                y_normalized = row_idx / (num_row - 1) if num_row > 1 else 0.5
-                
-                # Scale to image dimensions
+                # Convert to pixel coordinates
                 x = x_normalized * cfg.train_width
-                y = y_normalized * cfg.train_height
+                y = (row_idx / (num_row - 1)) * cfg.train_height
                 
                 lane_points.append((int(x), int(y)))
             
-            # Only add lane if it has enough points
             if len(lane_points) >= 2:
                 batch_lanes.append(lane_points)
         
         all_lanes.append(batch_lanes)
     
     return all_lanes
+
 
 
 def visualize_predictions(image, lanes, cfg, gt_lanes=None):

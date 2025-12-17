@@ -1,0 +1,47 @@
+(.venv) sswaterlab@ailab:~/Documents/Norakvitou/UFLD_v2$ python3 ./train/inference.py --checkpoint ./experiments/tusimple_resnet18/best_model.pth --image ./train/15.jpg
+
+============================================================
+Ultra-Fast Lane Detection - Testing
+============================================================
+Checkpoint: ./experiments/tusimple_resnet18/best_model.pth
+Device: cuda
+============================================================
+Loading model from: ./experiments/tusimple_resnet18/best_model.pth
+Loaded checkpoint from epoch 18 with accuracy 0.7965778853914447
+✓ Model loaded successfully
+
+Processing: ./train/15.jpg
+
+============================================================
+DEBUG: Prediction Statistics
+============================================================
+loc_row shape: torch.Size([1, 100, 56, 4])
+loc_row range: [-7.82, 12.51]
+loc_row mean: -0.00
+
+exist_row shape: torch.Size([1, 2, 56, 4])
+exist_prob range: [0.00, 1.00]
+exist_prob mean: 0.41
+High confidence predictions (>0.5): 93
+
+Invalid location predictions: 0
+============================================================
+
+Decoded 4 lanes:
+  Lane 0: 11 points
+    X range: [28, 332]
+    Y range: [128, 186]
+  Lane 1: 35 points
+    X range: [28, 452]
+    Y range: [116, 314]
+  Lane 2: 34 points
+    X range: [460, 668]
+    Y range: [122, 314]
+  Lane 3: 13 points
+    X range: [508, 756]
+    Y range: [116, 186]
+
+✓ Saved visualization to: test_outputs/pred_15.jpg
+✓ Detected 4 lanes
+
+✓ Testing complete!
