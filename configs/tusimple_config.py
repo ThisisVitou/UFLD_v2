@@ -34,8 +34,8 @@ class Config:
         
         # ============ Training Configuration ============
         self.batch_size = 32  # Reduce to 4 if OOM on Jetson Nano
-        self.epochs = 50
-        self.learning_rate = 0.05
+        self.epochs = 100
+        self.learning_rate = 0.001
         self.weight_decay = 1e-4
         self.momentum = 0.9
         self.optimizer = 'sgd'  # Options: 'sgd', 'adam', 'adamw'
@@ -52,11 +52,11 @@ class Config:
         # ============ Loss Weights ============
         self.loss_weights = {
             'loc': 1.0,      # Location classification loss
-            'exist': 0.1,    # Existence classification loss
+            'exist': 0.05,    # Existence classification loss
             'seg': 1.0,      # Segmentation loss (if use_aux=True)
             'relation': 0.0,      # Start at 0, can enable later
             'relation_dis': 0.00,   # Start at 0, can enable later
-            'mean_loss': 0.05
+            'mean_loss': 0.1
         }
         
         # ============ Data Augmentation ============
